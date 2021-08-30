@@ -1,0 +1,599 @@
+<?php
+
+/**
+ * @file
+ * Contains social_flex.module.
+ */
+
+use Drupal\Core\Access\AccessResult;
+use Drupal\Core\Ajax\AjaxResponse;
+use Drupal\Core\Ajax\ReplaceCommand;
+use Drupal\Core\Cache\Cache;
+use Drupal\Core\Database\Query\AlterableInterface;
+use Drupal\Core\Entity\ContentEntityInterface;
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Field\FieldDefinitionInterface;
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Session\AccountInterface;
+use Drupal\block\Entity\Block;
+use Drupal\field\Entity\FieldStorageConfig;
+use Drupal\group\Entity\Group;
+use Drupal\group\Entity\GroupInterface;
+use Drupal\social_flex\SocialFlexContentVisibilityUpdate;
+use Drupal\views\Plugin\views\query\QueryPluginBase;
+use Drupal\views\Plugin\views\row\EntityRow;
+use Drupal\views\ViewExecutable;
+use Drupal\views\Views;
+use Drupal\Core\Entity\EntityForm;
+
+/**
+ * Provide a method to alter array of group types used in open social.
+ *
+ * @param array $social_group_types
+ *   List of group types used in open social.
+ *
+ * @ingroup social_group_api
+ */
+
+function social_flex_social_group_types_alter(array &$social_group_types) {
+
+  $flexible_group_types = _social_flex_group_types_helper();
+  foreach($flexible_group_types as $group_type) {
+    if ($group_type !== 'flexible_group') {
+      $social_group_types[] = $group_type;
+    }
+  }
+
+
+}
+
+function _social_flex_group_types_helper() {
+  //$socialFlexCommon = \Drupal::service('social_flex.common');
+  //$flexible_group_types = $socialFlexCommon->getFlexibleGroups();
+  $group_types = [
+	'super' => 'super',
+        'flexible_group' => 'flexible_group'
+  ];  
+
+  return $group_types;
+
+}
+
+
+function social_flex_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'form_alter') {
+
+    // Move my_module_form_alter() to the end of the list.
+    // \Drupal::moduleHandler()->getImplementations()
+    // iterates through $implementations with a foreach loop which PHP iterates
+    // in the order that the items were added, so to move an item to the end of
+    // the array, we remove it and then add it.
+    $group = $implementations['social_flex'];
+    unset($implementations['social_group_flexible_group']);
+    unset($implementations['social_flex']);
+    $implementations['social_flex'] = $group;
+  }
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_access().
+ */
+
+function social_flex_group_access(EntityInterface $entity, $operation, AccountInterface $account) {
+
+  $result = AccessResult::neutral();
+  // Write custom access checks based on the new group visibility field.
+  // If group visibility doesn't exist we can skip this.
+  /** @var \Drupal\group\Entity\GroupInterface $entity */
+  if ($operation !== 'view' || !$entity->hasField('field_flexible_group_visibility')) {
+    return $result;
+  }
+  // If user has administer groups access we can skip this.
+  //if ($account->hasPermission('manage all groups')) {
+    //return $result;
+  //}
+
+  // If group visibility value doesn't exist we can skip.
+  if (empty($entity->getFieldValue('field_flexible_group_visibility', 'value'))) {
+    return $result;
+  }
+
+  // If group visibility exists and public is selected, we can skip.
+  $group_visibility = $entity->getFieldValue('field_flexible_group_visibility', 'value');
+  if ($group_visibility === 'public') {
+    return $result;
+  }
+
+  // If group visibility exists and community or members is selected, check
+  // if user is logged.
+  if ($group_visibility === 'community') {
+    return AccessResult::forbiddenIf($account->isAnonymous())
+      ->cachePerUser()
+      ->addCacheableDependency($entity);
+  }
+
+  // If group visibility exists and members only is selected, we need to check
+  // if user is logged in and is a member of the group.
+  if ($group_visibility === 'members') {
+    $not_a_member = !$entity->getMember($account) || $account->isAnonymous();
+    return AccessResult::forbiddenIf($not_a_member)
+      ->cachePerPermissions()
+      ->cachePerUser()
+      ->addCacheableDependency($entity)
+      ->addCacheableDependency($account);
+  }
+
+  return $result;
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function social_flex_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+
+  // As we need to check on all flexible groups we need our service
+  $socialFlexCommon = \Drupal::service('social_flex.common');
+  $groupForms = $socialFlexCommon->getFlexibleGroupForms();  
+
+  // Exposed Filter block on the all-groups overview and search.
+  if ($form['#id'] === 'views-exposed-form-newest-groups-page-all-groups' ||
+      $form['#id'] === 'views-exposed-form-search-groups-page-no-value' ||
+      $form['#id'] === 'views-exposed-form-search-groups-page') {
+
+    // Update filter values so it matches the join methods in the popover.
+    if (!empty($form['field_group_allowed_join_method'])) {
+      if (array_key_exists('added', $form['field_group_allowed_join_method']['#options'])) {
+        $form['field_group_allowed_join_method']['#options']['added'] = t('Invite only');
+      }
+      if (array_key_exists('direct', $form['field_group_allowed_join_method']['#options'])) {
+        $form['field_group_allowed_join_method']['#options']['direct'] = t('Open to join');
+      }
+      if (array_key_exists('request', $form['field_group_allowed_join_method']['#options'])) {
+        $form['field_group_allowed_join_method']['#options']['request'] = t('Request to join');
+      }
+    }
+
+    // Add states so this is only available when flexible groups is checked.
+    // Could be hidden when only flexible groups is enabled, so check that.
+    // @todo remove this once everything is migrated to flexible groups.
+
+    // As we have to check all flexible groups not only the provided
+    // we use our service to get all needed groups and do a or query    
+    $flexible_group_types = $socialFlexCommon->getFlexibleGroups();
+    $visibleValues = []; 
+    foreach($flexible_group_types as $group_id) {
+      $visibleValues['value'] = $group_id;
+    }   
+    
+    if (!empty($form['field_group_allowed_join_method']) &&
+      !empty($form['type']['#options']) &&
+      $form['type']['#type'] !== 'hidden') {
+      $form['field_group_allowed_join_method']['#states'] = [
+        'visible' => [
+          ':input[name="type"]' => [
+            $visibleValues
+          ],
+        ],
+      ];
+    }
+  }
+
+  if (in_array($form_id, $groupForms['edit'])) {
+    // Lets remove group type from flexible group.
+    // Editing is useless since the options are all in there.
+    if ($form['group_type']['#disabled']) {
+      // Remove all the options.
+      // @see social_group_form_alter().
+      unset($form['group_type']);
+      unset($form['#fieldgroups']['group_settings']->children['group_type']);
+      unset($form['#group_children']['group_type']);
+    }
+    $form['field_flexible_group_visibility']['#prefix'] =
+      t('Altering the visibility options could result in changes in access for content within this group and the group itself.');
+
+    $form['actions']['submit']['#submit'][] = '_social_flex_edit_submit';
+  }
+
+
+  // For adding or editing a flexible group, we alter the visibility fields.
+  if (in_array($form_id, $groupForms['add']) ||
+      in_array($form_id, $groupForms['edit'])) {        
+    // Change the group visibility on flexible groups.
+    if (!empty($form['field_group_allowed_visibility'])) {
+      if (!empty($form['field_group_allowed_visibility']['widget']['#title'])) {
+        $form['field_group_allowed_visibility']['widget']['#title'] = t('Group content visibility options');
+      }
+      if (!empty($form['field_group_allowed_visibility']['widget']['#description'])) {
+        $form['field_group_allowed_visibility']['widget']['#description'] = t('Choose the visibility options allowed for the group content.');
+      }
+      // When referencing select lists and radio buttons in remote conditions,
+      // a 'value' condition must be used.
+      $form['field_group_allowed_visibility']['#states'] = [
+        'visible' => [
+          ':input[name="field_flexible_group_visibility"]' => [
+            ['value' => 'public'],
+            ['value' => 'community'],
+            ['value' => 'members'],
+          ],
+        ],
+      ];
+    }
+    // Change the allowed join method on flexible groups.
+    if (!empty($form['field_group_allowed_join_method'])) {
+      // First we reorder the elmements, if invite only is part of it
+      // we always want to show this last.
+      if (!empty($form['field_group_allowed_join_method']['widget']['#options'])) {
+        if (array_key_exists('added', $form['field_group_allowed_join_method']['widget']['#options'])) {
+          $option = $form['field_group_allowed_join_method']['widget']['#options']['added'];
+          // Unset it.
+          unset($form['field_group_allowed_join_method']['widget']['#options']['added']);
+          // Add it at the end.
+          $form['field_group_allowed_join_method']['widget']['#options']['added'] = $option;
+        }
+      }
+
+      if (!empty($form['field_group_allowed_join_method']['widget']['#title'])) {
+        $form['field_group_allowed_join_method']['widget']['#title'] = t('Join methods');
+      }
+      if (!empty($form['field_group_allowed_join_method']['widget']['#description'])) {
+        $form['field_group_allowed_join_method']['widget']['#description'] = t('How can people join this group. Group managers can always add members directly, regardless of the chosen join method.');
+      }
+      // When referencing select lists and radio buttons in remote conditions,
+      // a 'value' condition must be used.
+      $form['field_group_allowed_join_method']['#states'] = [
+        'visible' => [
+          ':input[name="field_flexible_group_visibility"]' => [
+            ['value' => 'public'],
+            ['value' => 'community'],
+            ['value' => 'members'],
+          ],
+        ],
+      ];
+    }
+    // Change the allowed join method on flexible groups.
+    if (!empty($form['field_group_allowed_join_method'])) {
+      // First we reorder the elmements, if invite only is part of it
+      // we always want to show this last.
+      if (!empty($form['field_group_allowed_join_method']['widget']['#options'])) {
+        if (array_key_exists('added', $form['field_group_allowed_join_method']['widget']['#options'])) {
+          $option = $form['field_group_allowed_join_method']['widget']['#options']['added'];
+          // Unset it.
+          unset($form['field_group_allowed_join_method']['widget']['#options']['added']);
+          // Add it at the end.
+          $form['field_group_allowed_join_method']['widget']['#options']['added'] = $option;
+        }
+      }
+    
+      if (!empty($form['field_group_allowed_join_method']['widget']['#title'])) {
+        $form['field_group_allowed_join_method']['widget']['#title'] = t('Join methods');
+      }
+      if (!empty($form['field_group_allowed_join_method']['widget']['#description'])) {
+        $form['field_group_allowed_join_method']['widget']['#description'] = t('How can people join this group. Group managers can always add members directly, regardless of the chosen join method.');
+      }
+      // When referencing select lists and radio buttons in remote conditions,
+      // a 'value' condition must be used.
+      $form['field_group_allowed_join_method']['#states'] = [
+        'visible' => [
+          ':input[name="field_flexible_group_visibility"]' => [
+            ['value' => 'public'],
+            ['value' => 'community'],
+            ['value' => 'members'],
+          ],
+        ],
+      ];
+    }
+    // Only when adding a flexible group, we need to predefine the
+    // content visibility and join method based on the group visibility.
+    if (in_array($form_id, $groupForms['add'])) {
+      // Reset default_values on the add form only.
+      // So we can use state management to check / select.
+      if (!empty($form['field_group_allowed_join_method']['widget']['#default_value'])) {
+        $form['field_group_allowed_join_method']['widget']['#default_value'] = [];
+      }
+      if (!empty($form['field_group_allowed_visibility']['widget']['#default_value'])) {
+        $form['field_group_allowed_visibility']['widget']['#default_value'] = [];
+      }
+    }
+
+    // On the edit form, if there is no value set for the group_visibility
+    // it means it was an already existing flexible group and we need to add a
+    // default value so people can save it.
+    if (in_array($form_id, $groupForms['edit']) &&
+      empty($form['field_flexible_group_visibility']['widget']['#default_value'])) {
+      // The default is always community because we used to only have closed
+      // groups (which is visible for the community) or public if the
+      // content visibility has public as an option.
+      $form['field_flexible_group_visibility']['widget']['#default_value'] = 'community';
+      if (in_array('public', $form['field_group_allowed_visibility']['widget']['#default_value'])) {
+        $form['field_flexible_group_visibility']['widget']['#default_value'] = 'public';
+      }
+    }
+
+    // Disable type field if there are no terms added in 'Group type' vocab.
+    // Also, check for settings by SM for enabling this field.
+    $group_type_settings = \Drupal::config('social_group.settings')->get('social_group_type_required');
+    if ($group_type_settings
+      && isset($form['field_group_type'])
+      && !empty(\Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadTree('group_type'))) {
+      $form['field_group_type']['widget']['#required'] = TRUE;
+      // Unset the group type label for none.
+      if (isset($form['field_group_type']['widget']['#options']['_none'])) {
+        unset($form['field_group_type']['widget']['#options']['_none']);
+      }
+    }
+    else {
+      $form['field_group_type']['#access'] = FALSE;
+    }    
+
+    $form['#after_build'][] = 'social_flex_flexible_group_add_after_build';
+    //$form['#attached']['library'][] = 'tm_flex_group_community/admin';
+  }
+}
+
+/**
+ * After_build function for the flexible group add form to add default states.
+ *
+ * @param array $form
+ *   The form element.
+ * @param \Drupal\Core\Form\FormStateInterface $form_state
+ *   The form state.
+ *
+ * @return mixed
+ *   The form array containing the default values & states.
+ */
+function social_flex_flexible_group_add_after_build(array $form, FormStateInterface $form_state) {
+  // Add states for content visibility based on group visibility.
+  // Only on the add page. On edit we want users to be able to consciously
+  // decide what allowed visibility to select.
+  
+
+  if (isset($form['field_flexible_group_visibility']['widget']['#options'], $form['field_group_allowed_visibility']['widget']['#options'])) {
+    // If group visibility is public. All content visibility is selected.
+    $form['field_group_allowed_visibility']['widget']['public']['#states'] = [
+      'checked' => [
+        ':input[name="field_flexible_group_visibility"]' => [
+          ['value' => 'public'],
+        ],
+      ],
+      'unchecked' => [
+        ':input[name="field_flexible_group_visibility"]' => [
+          ['value' => 'community'],
+          ['value' => 'members'],
+        ],
+      ],
+    ];
+    // If group visibility is community. Communit & Group members are selected.
+    $form['field_group_allowed_visibility']['widget']['community']['#states'] = [
+      'checked' => [
+        ':input[name="field_flexible_group_visibility"]' => [
+          ['value' => 'public'],
+          ['value' => 'community'],
+        ],
+      ],
+      'unchecked' => [
+        ':input[name="field_flexible_group_visibility"]' => [
+          ['value' => 'members'],
+        ],
+      ],
+    ];
+    // If group visibility is group. Only group members are selected.
+    $form['field_group_allowed_visibility']['widget']['group']['#states'] = [
+      'checked' => [
+        ':input[name="field_flexible_group_visibility"]' => [
+          ['value' => 'public'],
+          ['value' => 'community'],
+          ['value' => 'members'],
+        ],
+      ],
+    ];
+    
+  }
+  // Add states for join method based on group visibility.
+  // We do this for add and edit, we want to make sure if users make the
+  // decision to choose to only show a group to it's Members, the
+  // join method is selected to Invite only. Because there is no way
+  // for users to join or request to join in that case.
+  if (isset($form['field_flexible_group_visibility']['widget']['#options'], $form['field_group_allowed_join_method']['widget']['#options'])) {
+    // If group visibility is members. Select invite-only.
+    if (!empty($form['field_group_allowed_join_method']['widget']['added'])) {
+      $form['field_group_allowed_join_method']['widget']['added']['#states'] = [
+        'checked' => [
+          ':input[name="field_flexible_group_visibility"]' => [
+            ['value' => 'members'],
+          ],
+        ],
+      ];
+    }
+    // If group visibility is members. Disable and uncheck open to join.
+    if (!empty($form['field_group_allowed_join_method']['widget']['direct'])) {
+      $form['field_group_allowed_join_method']['widget']['direct']['#states'] = [
+        'disabled' => [
+          ':input[name="field_flexible_group_visibility"]' => [
+            ['value' => 'members'],
+          ],
+        ],
+        'unchecked' => [
+          ':input[name="field_flexible_group_visibility"]' => [
+            ['value' => 'members'],
+          ],
+        ],
+      ];
+    }
+    // If group visibility is members. Disable and uncheck open to join.
+    if (!empty($form['field_group_allowed_join_method']['widget']['request'])) {
+      $form['field_group_allowed_join_method']['widget']['request']['#states'] = [
+        'disabled' => [
+          ':input[name="field_flexible_group_visibility"]' => [
+            ['value' => 'members'],
+          ],
+        ],
+        'unchecked' => [
+          ':input[name="field_flexible_group_visibility"]' => [
+            ['value' => 'members'],
+          ],
+        ],
+      ];
+    }
+  }
+  return $form;
+}
+
+/**
+ * Custom form submit handler for editing a flexible group.
+ *
+ * @param array $form
+ *   The form array.
+ * @param \Drupal\Core\Form\FormStateInterface $form_state
+ *   Form state.
+ *
+ * @throws \Drupal\Core\Entity\EntityStorageException
+ */
+function _social_flex_edit_submit(array $form, FormStateInterface $form_state) {
+  // Check if the visibility changed.
+  $default_visibility = $form['field_group_allowed_visibility']['widget']['#default_value'];
+  $new_visibility = $form_state->getValue('field_group_allowed_visibility');
+
+  $changed_visibility = [];
+  // If there was a visibility that we don't have anymore after editting
+  // all the content that was inside the group with this visibility
+  // will get the lowest visibility that is still checked.
+  foreach ($default_visibility as $key => $option) {
+    if (array_search($option, array_column($new_visibility, 'value')) === FALSE) {
+      $changed_visibility[] = $option;
+    }
+  }
+
+  // So there is now a visibility setting we don't support anymore
+  // after editing. Make sure we update all the content that has this
+  // to the next best optin.
+  if (!empty($changed_visibility)) {
+    $group = _social_group_get_current_group();
+
+    // Update the default visibility of all the content.
+    SocialFlexContentVisibilityUpdate::batchUpdateGroupContentVisibility($group, $changed_visibility, $new_visibility);
+
+    // Make sure we clear cache tags accordingly.
+    $cache_tags = _social_group_cache_tags($group);
+    foreach ($cache_tags as $cache_tag) {
+      Cache::invalidateTags([$cache_tag]);
+    }
+  }
+}
+
+/**
+ * Implements hook_social_group_request_alter()
+ */
+function social_flex_social_group_request_alter(array &$group_types) {
+
+  $socialFlexCommon = \Drupal::service('social_flex.common');
+  $flexible_group_types = $socialFlexCommon->getFlexibleGroups();
+
+  foreach($flexible_group_types as $group_type) {
+    if ($group_type !== 'flexible_group') {
+      $group_types[] = $group_type;
+    }
+  }
+}
+
+/**
+ * Implements hook_social_group_settings_alter()
+ */
+function social_flex_social_group_settings_alter(array &$group_types) {
+  $socialFlexCommon = \Drupal::service('social_flex.common');
+  $flexible_group_types = $socialFlexCommon->getFlexibleGroups();
+
+  foreach($flexible_group_types as $group_type) {
+    if ($group_type !== 'flexible_group') {
+      $group_types[] = $group_type;
+    }
+  }
+
+}
+
+
+/**
+ * Implements hook_menu_local_actions_alter().
+ */
+function social_flex_menu_local_actions_alter(&$local_actions) {
+  $group = _social_group_get_current_group();
+  $user = \Drupal::currentUser();
+
+  $socialFlexCommon = \Drupal::service('social_flex.common');
+  $flexible_group_types = $socialFlexCommon->getFlexibleGroups();
+
+  // Remove the social_group add member action on the
+  // membership overview if we can't add members directly.
+  // SM+ can still add members though.
+  if ($group instanceof GroupInterface
+    && in_array($group->getGroupType()->id(), $flexible_group_types)
+    && !social_group_flexible_group_can_be_added($group)
+    && !$user->hasPermission('manage all groups')
+    && !$group->hasPermission('administer members', $user)
+  ) {
+    unset($local_actions['social_group.add_member']);
+  }
+}
+
+/**
+ * Implements hook_block_access().
+ */
+function social_flex_block_access(Block $block, $operation, AccountInterface $account) {
+  // Service
+  $socialFlexCommon = \Drupal::service('social_flex.common');
+  $flexible_group_types = $socialFlexCommon->getFlexibleGroups();
+
+  // This is a list of the blocks that this function cares about, if we're being
+  // called for a different block we exit early.
+  $block_id = $block->getPluginId();
+  $managed_blocks = [
+    'views_exposed_filter_block:newest_groups-page_all_groups',
+    'views_block:groups-block_user_groups',
+    'views_block:upcoming_events-upcoming_events_group',
+    'views_block:latest_topics-group_topics_block',
+    'views_block:group_managers-block_list_managers',
+  ];
+  // We don't care for other blocks.
+  if (!in_array($block_id, $managed_blocks, FALSE)) {
+    return AccessResult::neutral();
+  }
+
+  $group = _social_group_get_current_group();
+  // We don't care about other group types in here.
+  if ($group && in_array($group->getGroupType()->id(),$flexible_group_types)) {
+    // Only when users cant join directly, add the managers block
+    // so they know who to contact.
+    if ($operation === 'view' &&
+      social_group_flexible_group_can_join_directly($group) &&
+      $block->getPluginId() === 'views_block:group_managers-block_list_managers') {
+      return AccessResult::forbidden();
+    }
+
+    // All users with permissions can see the rest.
+    if ($account->hasPermission('manage all groups')) {
+      return AccessResult::neutral();
+    }
+
+    if (!$group->getMember($account) &&
+      !social_group_flexible_group_community_enabled($group) &&
+      !social_group_flexible_group_public_enabled($group)) {
+      // If it is flexible and the current user is not an member of this group,
+      // and content visibility is not public and also not community
+      // hide it.
+      $forbidden_blocks = [
+        'views_block:upcoming_events-upcoming_events_group',
+        'views_block:latest_topics-group_topics_block',
+      ];
+      foreach ($forbidden_blocks as $forbidden_block) {
+        if ($operation === 'view' && $block->getPluginId() === $forbidden_block) {
+          return AccessResult::forbidden();
+        }
+      }
+    }
+  }
+
+  return AccessResult::neutral();
+}
+
+
+
+

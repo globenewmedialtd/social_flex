@@ -1,0 +1,7 @@
+name: 'Social Flex'
+type: module
+description: 'Create new group types with flexible group functionality turned on. This works when adding special fields to your custom group type.'
+core: 8.x
+package: 'Social'
+dependencies:
+  - social:social_group_flexible_group
