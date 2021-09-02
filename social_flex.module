@@ -26,6 +26,7 @@ use Drupal\views\Plugin\views\row\EntityRow;
 use Drupal\views\ViewExecutable;
 use Drupal\views\Views;
 use Drupal\Core\Entity\EntityForm;
+use Drupal\social_flex\EntityAccessHelper;
 
 /**
  * Provide a method to alter array of group types used in open social.
@@ -64,7 +65,6 @@ function social_flex_module_implements_alter(&$implementations, $hook) {
     unset($implementations['social_group_flexible_group']);
     unset($implementations['social_flex']);
     $implementations['social_flex'] = $group;
-    kint($implementations);
 
   }
 }
@@ -607,9 +607,6 @@ function social_flex_views_query_alter(ViewExecutable $view, QueryPluginBase $qu
   }
   // Add Flexible group to our array
   array_push($enabled_flex_group_types,'flexible_group');
-  \Drupal::logger('social_flex')->notice('QUERY_ALTER');
-  \Drupal::logger('social_flex')->notice('<pre><code>' . print_r($group_types, TRUE) . '</code></pre>');
-  \Drupal::logger('social_flex')->notice('<pre><code>' . print_r($enabled_flex_group_types, TRUE) . '</code></pre>');
 
 
   $account = \Drupal::currentUser();
@@ -663,13 +660,7 @@ function social_flex_views_query_alter(ViewExecutable $view, QueryPluginBase $qu
       $all_groups = $enabled_flex_group_types;     
       array_push($all_groups,'secret_group');
       array_push($all_groups,'closed_group');
-      array_push($all_groups,'open_group');
-      kint($enabled_flex_group_types);
-      kint($all_groups);
-      \Drupal::logger('social_flex')->notice('QUERY_ALTER_ANON');
-      \Drupal::logger('social_flex')->notice('<pre><code>' . print_r($all_groups, TRUE) . '</code></pre>');
-      \Drupal::logger('social_flex')->notice('<pre><code>' . print_r($enabled_flex_group_types, TRUE) . '</code></pre>');
-    
+      array_push($all_groups,'open_group');    
 
       $query->addWhere(1, 'groups_field_data.type', ['super'], 'NOT IN');
       $query->addWhere(2, 'groups_field_data.type',[
@@ -730,6 +721,14 @@ function social_flex_views_query_alter(ViewExecutable $view, QueryPluginBase $qu
     'community',
   ], 'IN');
 }
+
+/**
+ * Implements hook_node_access().
+ */
+function social_flex_node_access(NodeInterface $node, $op, AccountInterface $account) {
+  return EntityAccessHelper::getEntityAccessResult($node, $op, $account);
+}
+
 
 
 
