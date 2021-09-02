@@ -17,7 +17,7 @@ use Drupal\social_flex\SocialFlexCommonService;
 /**
  * Determines access to routes based flexible_group membership and settings.
  */
-class SocialFlexContentAccessCheck extends FlexibleGroupContentAccessCheck {
+class SocialFlexContentAccessCheck implements AccessInterface {
 
   /**
    * The social flex common service.
@@ -52,9 +52,8 @@ class SocialFlexContentAccessCheck extends FlexibleGroupContentAccessCheck {
    *   The access result.
    */
   public function access(Route $route, RouteMatchInterface $route_match, AccountInterface $account) {
-    
-    parent::access($route, $route_match, $account);
-    
+  
+  
     $permission = $route->getRequirement('_flexible_group_content_visibility');
 
     // Don't interfere if no permission was specified.
@@ -98,11 +97,6 @@ class SocialFlexContentAccessCheck extends FlexibleGroupContentAccessCheck {
             return AccessResult::forbidden();
           }
           break;
-        case 'community_role':
-          if (!$user->hasRole('internal')) {
-            return AccessResult::forbidden();
-          }
-          break;
       }
     }
 
@@ -125,7 +119,7 @@ class SocialFlexContentAccessCheck extends FlexibleGroupContentAccessCheck {
     // It's a non member but Community isn't enabled.
     // No access for you only for the about page.
     if ($account->isAuthenticated() && !social_group_flexible_group_community_enabled($group)
-      && !social_group_flexible_group_public_enabled($group) && !social_community_role_community_role_enabled($group) 
+      && !social_group_flexible_group_public_enabled($group) 
       && $route_match->getRouteName() !== 'view.group_information.page_group_about'
       && $route_match->getRouteName() !== 'entity.group.canonical'
       && $route_match->getRouteName() !== 'view.group_members.page_group_members') {

@@ -17,7 +17,7 @@ use Drupal\user\RoleInterface;
  *
  * @package Drupal\social_flex
  */
-class SocialFlexContentVisibilityUpdate extends FlexibleGroupContentVisibilityUpdate  {
+class SocialFlexContentVisibilityUpdate  {
 
   /**
    * Update Group content after Group changed.
@@ -32,9 +32,7 @@ class SocialFlexContentVisibilityUpdate extends FlexibleGroupContentVisibilityUp
    * @throws \Drupal\Core\Entity\EntityStorageException
    */
   public static function batchUpdateGroupContentVisibility(Group $group, array $changed_visibility, array $new_options) {
-    
-    parent::batchUpdateGroupContentVisibility($group, $changed_visibility, $new_options);
-    
+      
     // Set it up as a batch. We need to update visibility.
     // Load all the GroupContentEntities from Post to content.
     // Memberships don't need an update.

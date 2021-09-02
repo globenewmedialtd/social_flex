@@ -1,0 +1,9 @@
+social_flex.settings:
+  path: '/admin/config/opensocial/social-flex'
+  defaults:
+    _form: '\Drupal\social_flex\Form\SocialFlexSettingsForm'
+    _title: 'Social Flex settings'
+  requirements:
+    _permission: 'administer social_flex settings'
+  options:
+    _admin_route: TRUE

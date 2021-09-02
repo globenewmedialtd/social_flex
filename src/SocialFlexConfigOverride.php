@@ -120,7 +120,8 @@ class SocialFlexConfigOverride implements ConfigFactoryOverrideInterface {
       }
     }
 
-    $flex_group_types = _social_flex_group_types_helper();
+    $social_flex_config = $this->configFactory->getEditable('social_flex.settings');
+    $flex_group_types = $social_flex_config->get('flexible_group_types');
 
     $config_names = [
       'search_api.index.social_all',
@@ -171,6 +172,8 @@ class SocialFlexConfigOverride implements ConfigFactoryOverrideInterface {
         ];
       }
     }
+
+    /*
 
     $config_names = [
       'views.view.group_members',
@@ -305,6 +308,8 @@ class SocialFlexConfigOverride implements ConfigFactoryOverrideInterface {
         ],
       ];
     }
+
+    */
     
 
     $config_name = 'message.template.create_content_in_joined_group';
@@ -338,6 +343,7 @@ class SocialFlexConfigOverride implements ConfigFactoryOverrideInterface {
       $overrides[$config_name]['third_party_settings']['activity_logger']['activity_bundle_entities'] = $activity_bundle_entities_membership;
     }
     
+    /*
 
     $config_name = 'views.view.group_managers';
     $filters = $this->getFiltersForGroupMangersView();
@@ -353,7 +359,7 @@ class SocialFlexConfigOverride implements ConfigFactoryOverrideInterface {
         ],
       ];
     }      
-    
+    */
 
     // Add join options to the all-groups and search groups views.
     $filter_overview_join_methods = [
@@ -486,54 +492,57 @@ class SocialFlexConfigOverride implements ConfigFactoryOverrideInterface {
 
   protected function getFiltersForGroupMangersView() {
 
-    $group_types = _social_flex_group_types_helper();
+    $social_flex_config = $this->configFactory->getEditable('social_flex.settings');
+    $group_types = $social_flex_config->get('flexible_group_types');
+
     $filters = [];
     $role_target_id = 3;
-    foreach($group_types as $type) {
-      $role_target_name = 'group_roles_target_id_' . $role_target_id;
-      $filters[$role_target_name] = [
-        'id' => $role_target_name,
-        'table' => 'group_content__group_roles',
-        'field' => 'group_roles_target_id',
-        'relationship' => 'group_content',
-        'group_type' => 'group',
-        'admin_label' => '',
-        'operator' => '=',
-        'value' => $type . '-group_manager',
-        'group' => 1,
-        'exposed' => FALSE,
-        'expose' => [
-          'operator_id' => '',
-          'label' => '',
-          'description' => '',
-          'use_operator' => FALSE,
-          'operator' => '',
-          'identifier' => '',
-          'required' => FALSE,
-          'remember' => FALSE,
-          'multiple' => FALSE,
-          'remember_roles' => [
-            'authenticated' => 'authenticated',
+    foreach($group_types as $key => $type) {
+      if ($key === $type) {
+        $role_target_name = 'group_roles_target_id_' . $role_target_id;
+        $filters[$role_target_name] = [
+          'id' => $role_target_name,
+          'table' => 'group_content__group_roles',
+          'field' => 'group_roles_target_id',
+          'relationship' => 'group_content',
+          'group_type' => 'group',
+          'admin_label' => '',
+          'operator' => '=',
+          'value' => $type . '-group_manager',
+          'group' => 1,
+          'exposed' => FALSE,
+          'expose' => [
+            'operator_id' => '',
+            'label' => '',
+            'description' => '',
+            'use_operator' => FALSE,
+            'operator' => '',
+            'identifier' => '',
+            'required' => FALSE,
+            'remember' => FALSE,
+            'multiple' => FALSE,
+            'remember_roles' => [
+              'authenticated' => 'authenticated',
+            ],
+            'placeholder' => '',
           ],
-          'placeholder' => '',
-        ],
-        'is_grouped' => FALSE,
-        'group_info' => [
-          'label' => '',
-          'description' => '',
-          'identifier' => '',
-          'optional' => TRUE,
-          'widget' => 'select',
-          'multiple' => FALSE,
-          'remember' => FALSE,
-          'default_group' => 'All',
-          'default_group_multiple' => [],
-          'group_items' => [],
-        ],
-        'plugin_id' => 'string',
-      ];
-      $role_target_id++;
-
+          'is_grouped' => FALSE,
+          'group_info' => [
+            'label' => '',
+            'description' => '',
+            'identifier' => '',
+            'optional' => TRUE,
+            'widget' => 'select',
+            'multiple' => FALSE,
+            'remember' => FALSE,
+            'default_group' => 'All',
+            'default_group_multiple' => [],
+            'group_items' => [],
+          ],
+          'plugin_id' => 'string',
+        ];
+        $role_target_id++;
+      }
     }
 
     return $filters;
@@ -543,10 +552,14 @@ class SocialFlexConfigOverride implements ConfigFactoryOverrideInterface {
 
   protected function getSearchApiViewModes() {
 
-    $group_types = _social_flex_group_types_helper();
+    $social_flex_config = $this->configFactory->getEditable('social_flex.settings');
+    $group_types = $social_flex_config->get('flexible_group_types');
+
     $view_modes = [];
-    foreach($group_types as $type) {
-      $view_modes[$type] = 'teaser';
+    foreach($group_types as $key => $type) {
+      if ($key === $type) {
+        $view_modes[$type] = 'teaser';
+      }
     }
 
     return $view_modes;
@@ -555,11 +568,15 @@ class SocialFlexConfigOverride implements ConfigFactoryOverrideInterface {
 
   protected function getGroupViewsFilters() {
 
-    $group_types = _social_flex_group_types_helper();
+    $social_flex_config = $this->configFactory->getEditable('social_flex.settings');
+    $group_types = $social_flex_config->get('flexible_group_types');
+
     $filters = [];
-    foreach($group_types as $type) {
-      $filter_name = $type . '-group_membership';
-      $filters[$filter_name] = $filter_name;
+    foreach($group_types as $key => $type) {
+      if ($key === $type) {
+        $filter_name = $type . '-group_membership';
+        $filters[$filter_name] = $filter_name;
+      }
     }
 
     return $filters;    
@@ -567,15 +584,18 @@ class SocialFlexConfigOverride implements ConfigFactoryOverrideInterface {
   }
 
   protected function getActivityBundleEntities() {
-    $group_types = _social_flex_group_types_helper();
+
+    $social_flex_config = $this->configFactory->getEditable('social_flex.settings');
+    $group_types = $social_flex_config->get('flexible_group_types');
+
     $bundles = [];
-    foreach($group_types as $type) {
-      $bundle_name_event = 'group_content-' . $type . '-group_node-event';
-      $bundle_name_topic = 'group_content-' . $type . '-group_node-topic';
-      
-      $bundles[$bundle_name_event] = $bundle_name_event;
-      $bundles[$bundle_name_topic] = $bundle_name_topic;
-      
+    foreach($group_types as $key => $type) {
+      if ($key === $type) {
+        $bundle_name_event = 'group_content-' . $type . '-group_node-event';
+        $bundle_name_topic = 'group_content-' . $type . '-group_node-topic';
+        $bundles[$bundle_name_event] = $bundle_name_event;
+        $bundles[$bundle_name_topic] = $bundle_name_topic;
+      }
     }
 
     return $bundles;
@@ -583,11 +603,14 @@ class SocialFlexConfigOverride implements ConfigFactoryOverrideInterface {
 
   protected function getActivityBundleEntitiesMembership() {
 
-    $group_types = _social_flex_group_types_helper();
+    $social_flex_config = $this->configFactory->getEditable('social_flex.settings');
+    $group_types = $social_flex_config->get('flexible_group_types');
+
     $bundles = [];
-    foreach($group_types as $type) {
-      $bundle_name = 'group_content-' . $type . '-group_membership';
-      
+    foreach($group_types as $key => $type) {
+      if ($key === $type) {
+        $bundle_name = 'group_content-' . $type . '-group_membership';
+      }
       $bundles[$bundle_name] = $bundle_name;
       
     }
@@ -598,11 +621,14 @@ class SocialFlexConfigOverride implements ConfigFactoryOverrideInterface {
 
   protected function getActivityBundleEntitiesInvitation() {
 
-    $group_types = _social_flex_group_types_helper();
+    $social_flex_config = $this->configFactory->getEditable('social_flex.settings');
+    $group_types = $social_flex_config->get('flexible_group_types');
+
     $bundles = [];
-    foreach($group_types as $type) {
-      $bundle_name = 'group_content-' . $type . '-group_invitation';
-      
+    foreach($group_types as $key => $type) {
+      if ($key === $type) {
+        $bundle_name = 'group_content-' . $type . '-group_invitation';
+      }
       $bundles[$bundle_name] = $bundle_name;
       
     }

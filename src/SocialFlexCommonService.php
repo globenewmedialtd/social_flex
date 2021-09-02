@@ -74,22 +74,37 @@ class SocialFlexCommonService {
     $group_types = [];
     /** @var \Drupal\group\Entity\GroupType $group_type */
     //$group_type_storage = $this->entityTypeManager->getStorage('group_type');
-    //$test = GroupType::loadMultiple();
-    /*
     foreach (GroupType::loadMultiple() as $group_type) {
       $group_id = $group_type->id();
-      if ($this->detectFlexibleGroupFields($group_id)) {
-        // Forms have a dash instead of an underscore        
+      if ($this->detectFlexibleGroupFields($group_id)) {     
         $group_types[] = $group_id;
       }      
-    }
-    */
-
-    $group_types[] = 'super';
+    }  
 
     return $group_types;
 
   }
+
+  /**
+   * Return all Flexible group machine names
+   */
+  public function getFlexibleGroupsForSettings() {
+
+    $group_types = [];
+    /** @var \Drupal\group\Entity\GroupType $group_type */
+    //$group_type_storage = $this->entityTypeManager->getStorage('group_type');
+    foreach (GroupType::loadMultiple() as $group_type) {
+      $group_id = $group_type->id();
+      $group_label = $group_type->label();
+      if ($this->detectFlexibleGroupFields($group_id) &&
+          $group_id !== 'flexible_group') {     
+        $group_types[$group_id] = $group_label;
+      }      
+    }  
+
+    return $group_types;
+
+  }  
 
   /**
    * Return all Flexible group form_id

@@ -16,7 +16,7 @@ use Drupal\social_flex\SocialFlexCommonService;
 /**
  * Determines access to routes based flexible_group membership and settings.
  */
-class SocialFlexJoinPermissionAccessCheck extends FlexibleGroupJoinPermissionAccessCheck {
+class SocialFlexJoinPermissionAccessCheck implements AccessInterface {
 
   /**
    * The social flex common service.

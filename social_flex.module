@@ -19,6 +19,7 @@ use Drupal\block\Entity\Block;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\group\Entity\Group;
 use Drupal\group\Entity\GroupInterface;
+use Drupal\group\Entity\GroupTypeInterface;
 use Drupal\social_flex\SocialFlexContentVisibilityUpdate;
 use Drupal\views\Plugin\views\query\QueryPluginBase;
 use Drupal\views\Plugin\views\row\EntityRow;
@@ -36,33 +37,24 @@ use Drupal\Core\Entity\EntityForm;
  */
 
 function social_flex_social_group_types_alter(array &$social_group_types) {
-
+  
+  /*
   $flexible_group_types = _social_flex_group_types_helper();
-  foreach($flexible_group_types as $group_type) {
-    if ($group_type !== 'flexible_group') {
-      $social_group_types[] = $group_type;
+  if (isset($flexible_group_types) && !empty($flexible_group_types)) {
+    foreach($flexible_group_types as $group_type) {
+      if ($group_type !== 'flexible_group') {
+        $social_group_types[] = $group_type;
+      }
     }
   }
-
-
-}
-
-function _social_flex_group_types_helper() {
-  //$socialFlexCommon = \Drupal::service('social_flex.common');
-  //$flexible_group_types = $socialFlexCommon->getFlexibleGroups();
-  $group_types = [
-	'super' => 'super',
-        'flexible_group' => 'flexible_group'
-  ];  
-
-  return $group_types;
+  */
+  $social_group_types[] = 'super';
 
 }
-
 
 function social_flex_module_implements_alter(&$implementations, $hook) {
-  if ($hook == 'form_alter') {
-
+  if ($hook == 'form_alter' || $hook == 'views_query_alter') {
+    
     // Move my_module_form_alter() to the end of the list.
     // \Drupal::moduleHandler()->getImplementations()
     // iterates through $implementations with a foreach loop which PHP iterates
@@ -72,6 +64,8 @@ function social_flex_module_implements_alter(&$implementations, $hook) {
     unset($implementations['social_group_flexible_group']);
     unset($implementations['social_flex']);
     $implementations['social_flex'] = $group;
+    kint($implementations);
+
   }
 }
 
@@ -133,7 +127,7 @@ function social_flex_form_alter(&$form, FormStateInterface $form_state, $form_id
 
   // As we need to check on all flexible groups we need our service
   $socialFlexCommon = \Drupal::service('social_flex.common');
-  $groupForms = $socialFlexCommon->getFlexibleGroupForms();  
+  $groupForms = $socialFlexCommon->getFlexibleGroupForms(); 
 
   // Exposed Filter block on the all-groups overview and search.
   if ($form['#id'] === 'views-exposed-form-newest-groups-page-all-groups' ||
@@ -593,6 +587,152 @@ function social_flex_block_access(Block $block, $operation, AccountInterface $ac
 
   return AccessResult::neutral();
 }
+
+/**
+ * Implements hook_views_query_alter().
+ *
+ * Hide flexible groups everywhere when the current user cant see it.
+ */
+function social_flex_views_query_alter(ViewExecutable $view, QueryPluginBase $query) {
+  if (empty($view->rowPlugin) || !($view->rowPlugin instanceof EntityRow) || $view->rowPlugin->getEntityTypeId() !== 'group') {
+    return;
+  }
+
+  $group_types = \Drupal::config('social_flex.settings')->get('flexible_group_types');
+  $enabled_flex_group_types = [];
+  foreach($group_types as $key => $type) {
+    if($key === $type) {
+      $enabled_flex_group_types[] = $type;
+    }
+  }
+  // Add Flexible group to our array
+  array_push($enabled_flex_group_types,'flexible_group');
+  \Drupal::logger('social_flex')->notice('QUERY_ALTER');
+  \Drupal::logger('social_flex')->notice('<pre><code>' . print_r($group_types, TRUE) . '</code></pre>');
+  \Drupal::logger('social_flex')->notice('<pre><code>' . print_r($enabled_flex_group_types, TRUE) . '</code></pre>');
+
+
+  $account = \Drupal::currentUser();
+
+  if (!$account->isAnonymous()) {
+    // Don't trigger page cache, this will cache it for AN
+    // but with LU data.
+    // Dynamic page cache handles this.
+    \Drupal::service('page_cache_kill_switch')->trigger();
+  }
+
+  // Don't check, they can see it all.
+  if ($account->hasPermission('manage all groups')) {
+    return;
+  }
+
+  // Let's build our join with the allowed visibility data.
+  $configuration = [
+    'type'       => 'LEFT',
+    'table'      => 'group__field_flexible_group_visibility',
+    'field'      => 'entity_id',
+    'left_table' => 'groups_field_data',
+    'left_field' => 'id',
+    'operator'   => '=',
+  ];
+
+  $alias = 'groups_field_flexible_group_visibility';
+
+  /** @var \Drupal\views\Plugin\views\query\Sql $query */
+  $join = Views::pluginManager('join')->createInstance('standard', $configuration);
+  $rel = $query->addRelationship($alias, $join, 'groups_field_data');
+  $query->addTable('group__field_flexible_group_visibility', $rel, $join, $alias);
+
+  /** @var \Drupal\views\Plugin\views\query\Sql $query */
+  $current_where = count($query->where);
+
+  // Make sure we add one new group with a where clause.
+  $new_where = $current_where + 1;
+
+  // We need to add our group by using a query tag.
+  // Otherwise views doesn't accept it.
+  $query->addTag('flexible_group_by');
+
+  // AN users can only see flexible groups that are public.
+  if ($account->isAnonymous()) {
+    // Add context so for AN it will have a different cache.
+    $view->element['#cache']['contexts'][] = 'user.roles:anonymous';
+    $query->setGroupOperator('OR');
+    // Secret group also alters the query, so lets do it better.
+    if (\Drupal::moduleHandler()->moduleExists('social_group_secret')) {
+      $all_groups = $enabled_flex_group_types;     
+      array_push($all_groups,'secret_group');
+      array_push($all_groups,'closed_group');
+      array_push($all_groups,'open_group');
+      kint($enabled_flex_group_types);
+      kint($all_groups);
+      \Drupal::logger('social_flex')->notice('QUERY_ALTER_ANON');
+      \Drupal::logger('social_flex')->notice('<pre><code>' . print_r($all_groups, TRUE) . '</code></pre>');
+      \Drupal::logger('social_flex')->notice('<pre><code>' . print_r($enabled_flex_group_types, TRUE) . '</code></pre>');
+    
+
+      $query->addWhere(1, 'groups_field_data.type', ['super'], 'NOT IN');
+      $query->addWhere(2, 'groups_field_data.type',[
+        'flexible_group',
+        'super',
+        'secret_group',
+        'closed_group',
+        'open_group',
+      ], 'NOT IN');
+      $query->addWhere($new_where, 'field_flexible_group_visibility_value', ['public'], 'IN');
+      $query->addWhere($new_where, 'groups_field_data.type', ['super'], 'IN');
+      return;
+    }
+
+    // Make sure we remove flexible group as an option so only public groups
+    // are part of this clause.
+    $query->addWhere($current_where, 'groups_field_data.type', ['super'], 'NOT IN');
+
+    // OR it is a flexible group but than we only want groups
+    // that have the public content visibility for AN users.
+    $query->setWhereGroup('AND', $new_where);
+    $query->addWhere($new_where, 'field_flexible_group_visibility_value', ['public'], 'IN');
+    $query->addWhere($new_where, 'groups_field_data.type', ['super'], 'IN');
+    return;
+  }
+
+  // We need to render this as an OR operator now.
+  // Because we want to allow the other filters to still take place.
+  $query->setGroupOperator('OR');
+
+  // First we remove flexible groups from the existing where clause.
+  // We need this, otherwise there won't be any open, closed, public groups
+  // showed.
+  $query->addWhere($current_where, 'groups_field_data.type', ['super'], 'NOT IN');
+
+  // In this case we are LU, we already checked if we have the manage groups
+  // permission. So lets add a check to remove flexible groups
+  // that have the group_visibility set to members for groups we are a
+  // member of.
+  $my_groups = \Drupal::service('social_group.helper_service')
+    ->getAllGroupsForUser($account->id());
+  $view->element['#cache']['contexts'][] = 'user';
+  // Make sure this block gets refreshed for a user if the group membership
+  // changed for this user.
+  if (!empty($my_groups)) {
+    $view->element['#cache']['tags'][] = 'group_content_list:plugin:group_membership:entity:' . $account->id();
+    $query->setWhereGroup('AND', $new_where);
+    $query->addWhere($new_where, 'field_flexible_group_visibility_value', ['members'], 'IN');
+    $query->addWhere($new_where, 'groups_field_data.id', $my_groups, 'IN');
+  }
+  $extra_where = $new_where + 1;
+  // OR we add a new Where clause for any community group visibility related
+  // groups. Because any LU can see those for the community, regardless of
+  // their memberships.
+  $query->setWhereGroup('AND', $extra_where);
+  $query->addWhere($extra_where, 'field_flexible_group_visibility_value', [
+    'public',
+    'community',
+  ], 'IN');
+}
+
+
+
 
 
 

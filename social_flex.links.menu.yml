@@ -1,0 +1,5 @@
+social_flex.admin.config.social.social_flex.settings:
+  title: 'Social Flex settings'
+  description: 'Settings for Social Flex module.'
+  route_name: social_flex.settings
+  parent: social_core.admin.config.social
