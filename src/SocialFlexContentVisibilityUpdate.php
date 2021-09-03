@@ -205,12 +205,28 @@ class SocialFlexContentVisibilityUpdate  {
         if (in_array('group', $option_values)) {
           $visibility = 'group';
         }
+        if (in_array('community_role', $option_values)) {
+          $visibility = 'community_role';
+        }
         break;
+
+      case 'community_role':
+        $visibility = 'public';
+        if (in_array('group', $option_values)) {
+          $visibility = 'group';
+        }
+        if (in_array('community', $option_values)) {
+          $visibility = 'community';
+        }        
+        break;  
         
       case 'public':
         $visibility = 'group';
         if (in_array('community', $option_values)) {
           $visibility = 'community';
+        }
+        if (in_array('community_role', $option_values)) {
+          $visibility = 'community_role';
         }
         break;
 
@@ -218,6 +234,9 @@ class SocialFlexContentVisibilityUpdate  {
         $visibility = 'public';
         if (in_array('community', $option_values)) {
           $visibility = 'community';
+        }
+        if (in_array('community_role', $option_values)) {
+          $visibility = 'community_role';
         }
         break;
     }

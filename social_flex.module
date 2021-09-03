@@ -27,6 +27,7 @@ use Drupal\views\ViewExecutable;
 use Drupal\views\Views;
 use Drupal\Core\Entity\EntityForm;
 use Drupal\social_flex\EntityAccessHelper;
+use Drupal\node\NodeInterface;
 
 /**
  * Provide a method to alter array of group types used in open social.
@@ -106,6 +107,17 @@ function social_flex_group_access(EntityInterface $entity, $operation, AccountIn
       ->addCacheableDependency($entity);
   }
 
+  // If we have social_community_role enabled
+  if (\Drupal::moduleHandler()->moduleExists('social_community_role')) {
+    if ($group_visibility === 'community_role') {
+      $uid = $account->id();
+      $user = \Drupal::service('entity_type.manager')->getStorage('user')->load($uid); 
+      return AccessResult::forbiddenIf(!$user->hasRole('internal'))
+        ->cachePerUser()
+        ->addCacheableDependency($entity);
+    }
+  }
+
   // If group visibility exists and members only is selected, we need to check
   // if user is logged in and is a member of the group.
   if ($group_visibility === 'members') {
@@ -127,7 +139,8 @@ function social_flex_form_alter(&$form, FormStateInterface $form_state, $form_id
 
   // As we need to check on all flexible groups we need our service
   $socialFlexCommon = \Drupal::service('social_flex.common');
-  $groupForms = $socialFlexCommon->getFlexibleGroupForms(); 
+  $groupForms = $socialFlexCommon->getFlexibleGroupForms();
+  $visibility_options = _social_flex_get_visibility_options(); 
 
   // Exposed Filter block on the all-groups overview and search.
   if ($form['#id'] === 'views-exposed-form-newest-groups-page-all-groups' ||
@@ -204,11 +217,7 @@ function social_flex_form_alter(&$form, FormStateInterface $form_state, $form_id
       // a 'value' condition must be used.
       $form['field_group_allowed_visibility']['#states'] = [
         'visible' => [
-          ':input[name="field_flexible_group_visibility"]' => [
-            ['value' => 'public'],
-            ['value' => 'community'],
-            ['value' => 'members'],
-          ],
+          ':input[name="field_flexible_group_visibility"]' => $visibility_options
         ],
       ];
     }
@@ -236,11 +245,7 @@ function social_flex_form_alter(&$form, FormStateInterface $form_state, $form_id
       // a 'value' condition must be used.
       $form['field_group_allowed_join_method']['#states'] = [
         'visible' => [
-          ':input[name="field_flexible_group_visibility"]' => [
-            ['value' => 'public'],
-            ['value' => 'community'],
-            ['value' => 'members'],
-          ],
+          ':input[name="field_flexible_group_visibility"]' => $visibility_options
         ],
       ];
     }
@@ -268,11 +273,7 @@ function social_flex_form_alter(&$form, FormStateInterface $form_state, $form_id
       // a 'value' condition must be used.
       $form['field_group_allowed_join_method']['#states'] = [
         'visible' => [
-          ':input[name="field_flexible_group_visibility"]' => [
-            ['value' => 'public'],
-            ['value' => 'community'],
-            ['value' => 'members'],
-          ],
+          ':input[name="field_flexible_group_visibility"]' => $visibility_options
         ],
       ];
     }
@@ -353,6 +354,7 @@ function social_flex_flexible_group_add_after_build(array $form, FormStateInterf
         ':input[name="field_flexible_group_visibility"]' => [
           ['value' => 'community'],
           ['value' => 'members'],
+          ['value' => 'community_role'],
         ],
       ],
     ];
@@ -367,9 +369,30 @@ function social_flex_flexible_group_add_after_build(array $form, FormStateInterf
       'unchecked' => [
         ':input[name="field_flexible_group_visibility"]' => [
           ['value' => 'members'],
+          ['value' => 'community_role'],
         ],
       ],
     ];
+
+    // If we have social_community_role enabled
+    if (\Drupal::moduleHandler()->moduleExists('social_community_role')) {
+      $form['field_group_allowed_visibility']['widget']['community_role']['#states'] = [
+        'checked' => [
+          ':input[name="field_flexible_group_visibility"]' => [
+            ['value' => 'community_role'],
+          ],
+        ],
+        'unchecked' => [
+          ':input[name="field_flexible_group_visibility"]' => [
+            ['value' => 'members'],
+            ['value' => 'public'],
+            ['value' => 'community'],
+          ],
+        ],
+      ];
+    }
+
+
     // If group visibility is group. Only group members are selected.
     $form['field_group_allowed_visibility']['widget']['group']['#states'] = [
       'checked' => [
@@ -568,6 +591,7 @@ function social_flex_block_access(Block $block, $operation, AccountInterface $ac
     }
 
     if (!$group->getMember($account) &&
+      !social_community_role_community_role_enabled($group) &&
       !social_group_flexible_group_community_enabled($group) &&
       !social_group_flexible_group_public_enabled($group)) {
       // If it is flexible and the current user is not an member of this group,
@@ -607,6 +631,9 @@ function social_flex_views_query_alter(ViewExecutable $view, QueryPluginBase $qu
   }
   // Add Flexible group to our array
   array_push($enabled_flex_group_types,'flexible_group');
+  \Drupal::logger('social_flex')->notice('QUERY_ALTER');
+  \Drupal::logger('social_flex')->notice('<pre><code>' . print_r($group_types, TRUE) . '</code></pre>');
+  \Drupal::logger('social_flex')->notice('<pre><code>' . print_r($enabled_flex_group_types, TRUE) . '</code></pre>');
 
 
   $account = \Drupal::currentUser();
@@ -660,7 +687,11 @@ function social_flex_views_query_alter(ViewExecutable $view, QueryPluginBase $qu
       $all_groups = $enabled_flex_group_types;     
       array_push($all_groups,'secret_group');
       array_push($all_groups,'closed_group');
-      array_push($all_groups,'open_group');    
+      array_push($all_groups,'open_group');
+      \Drupal::logger('social_flex')->notice('QUERY_ALTER_ANON');
+      \Drupal::logger('social_flex')->notice('<pre><code>' . print_r($all_groups, TRUE) . '</code></pre>');
+      \Drupal::logger('social_flex')->notice('<pre><code>' . print_r($enabled_flex_group_types, TRUE) . '</code></pre>');
+    
 
       $query->addWhere(1, 'groups_field_data.type', ['super'], 'NOT IN');
       $query->addWhere(2, 'groups_field_data.type',[
@@ -722,6 +753,28 @@ function social_flex_views_query_alter(ViewExecutable $view, QueryPluginBase $qu
   ], 'IN');
 }
 
+function _social_flex_get_visibility_options() {
+
+  if (\Drupal::moduleHandler()->moduleExists('social_community_role')) {
+    $visibility_options = [
+      ['value' => 'public'],
+      ['value' => 'community'],
+      ['value' => 'community_role'],
+      ['value' => 'members'],
+    ];
+  }
+  else {
+    $visibility_options = [
+      ['value' => 'public'],
+      ['value' => 'community'],
+      ['value' => 'members'],
+    ];  
+  }
+
+  return $visibility_options;
+
+}
+
 /**
  * Implements hook_node_access().
  */
@@ -729,6 +782,12 @@ function social_flex_node_access(NodeInterface $node, $op, AccountInterface $acc
   return EntityAccessHelper::getEntityAccessResult($node, $op, $account);
 }
 
+function social_flex_social_group_allowed_visibilities(&$visibility,$group_type_id) {
+  kint($visibility);
+  kint($visibility);
+  kint($visibility);
+
+}
 
 
 

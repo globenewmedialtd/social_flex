@@ -118,7 +118,8 @@ class RedirectSubscriber implements EventSubscriberInterface {
     elseif (
       in_array($route_name, $routes) &&
       !social_group_flexible_group_community_enabled($group) &&
-      !social_group_flexible_group_public_enabled($group)      
+      !social_group_flexible_group_public_enabled($group) &&
+      !social_community_role_community_role_enabled($group)      
     ) {
       $this->doRedirect($event, $group);
     }

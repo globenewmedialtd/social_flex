@@ -6,7 +6,6 @@ use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Config\ConfigFactoryOverrideInterface;
 use Drupal\Core\Config\StorageInterface;
-use Drupal\social_flex\SocialFlexCommonService;
 
 /**
  * Class SocialFlexConfigOverride.
@@ -22,12 +21,6 @@ class SocialFlexConfigOverride implements ConfigFactoryOverrideInterface {
    */
   protected $configFactory;
 
-  /**
-   * The social flex common service.
-   *
-   * @var \Drupal\social_flex\SocialFlexCommonService
-   */
-  protected $socialFlexCommonService;  
 
   /**
    * Constructs the configuration override.
@@ -38,11 +31,9 @@ class SocialFlexConfigOverride implements ConfigFactoryOverrideInterface {
    *   The social flex common service
    */
   public function __construct(
-    ConfigFactoryInterface $config_factory,
-    SocialFlexCommonService $social_flex_common_service    
+    ConfigFactoryInterface $config_factory  
     ) {
     $this->configFactory = $config_factory;
-    $this->socialFlexCommonService = $social_flex_common_service;
   }
 
   /**
