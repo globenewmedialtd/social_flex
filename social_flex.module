@@ -112,7 +112,7 @@ function social_flex_group_access(EntityInterface $entity, $operation, AccountIn
     if ($group_visibility === 'community_role') {
       $uid = $account->id();
       $user = \Drupal::service('entity_type.manager')->getStorage('user')->load($uid); 
-      return AccessResult::forbiddenIf(!$user->hasRole('internal'))
+      return AccessResult::forbiddenIf(!$user->hasRole('intern'))
         ->cachePerUser()
         ->addCacheableDependency($entity);
     }

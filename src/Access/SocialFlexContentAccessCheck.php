@@ -100,7 +100,7 @@ class SocialFlexContentAccessCheck implements AccessInterface {
 
         case 'community_role':
 
-          if (!$user->hasRole('internal')) {
+          if (!$user->hasRole('intern')) {
             return AccessResult::forbidden();
           }
           break;  
