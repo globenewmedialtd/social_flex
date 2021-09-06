@@ -108,20 +108,40 @@ class RedirectSubscriber implements EventSubscriberInterface {
       'social_group.stream',
     ];
 
-    // If "Allowed join method" is not set to "Join directly" in this group.
-    if (
-      $route_name === 'entity.group.join' &&
-      !social_group_flexible_group_can_join_directly($group)
-    ) {
-      $this->doRedirect($event, $group);
+
+    // If we have social_community_role enabled
+    if (\Drupal::moduleHandler()->moduleExists('social_community_role')) {
+      // If "Allowed join method" is not set to "Join directly" in this group.
+      if (
+        $route_name === 'entity.group.join' &&
+        !social_group_flexible_group_can_join_directly($group)
+      ) {
+        $this->doRedirect($event, $group);
+      }
+      elseif (
+        in_array($route_name, $routes) &&
+        !social_group_flexible_group_community_enabled($group) &&
+        !social_group_flexible_group_public_enabled($group) &&
+        !social_community_role_community_role_enabled($group)      
+      ) {
+        $this->doRedirect($event, $group);
+      }
     }
-    elseif (
-      in_array($route_name, $routes) &&
-      !social_group_flexible_group_community_enabled($group) &&
-      !social_group_flexible_group_public_enabled($group) &&
-      !social_community_role_community_role_enabled($group)      
-    ) {
-      $this->doRedirect($event, $group);
+    else {
+      // If "Allowed join method" is not set to "Join directly" in this group.
+      if (
+        $route_name === 'entity.group.join' &&
+        !social_group_flexible_group_can_join_directly($group)
+      ) {
+        $this->doRedirect($event, $group);
+      }
+      elseif (
+        in_array($route_name, $routes) &&
+        !social_group_flexible_group_community_enabled($group) &&
+        !social_group_flexible_group_public_enabled($group)    
+      ) {
+        $this->doRedirect($event, $group);
+      }
     }
   }
 

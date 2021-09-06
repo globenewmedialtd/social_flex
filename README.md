@@ -5,9 +5,14 @@ This module provides handling for custom flexible groups. To make it work you mu
 - field_flexible_group_visibility
 - field_group_allowed_join_method
 
-Please also create the same field groups! 
+Please also create the same field groups! Have a look at social_group_flexible_group for the required field groups. 
 
 ## Installation
 
-Install like any other module. No configuration needed. Just enable and use it.
+Install like any other module.
+
+## Configuration
+
+Your custom flexible groups will be detected automatically at admin/config/opensocial/social-flex.
+Please tick them to activate the flexible group logic.
 

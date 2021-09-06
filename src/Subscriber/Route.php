@@ -67,7 +67,7 @@ class Route extends RouteSubscriberBase {
     // hook_social_group_flexible_group_content_routes_alter().
     // This to ensure extensions can also add their content tabs.
     \Drupal::moduleHandler()
-      ->alter('social_group_flexible_group_content_routes', $content_routes);
+      ->alter('social_flex_content_routes', $content_routes);
 
     foreach ($content_routes as $name) {
       if ($route = $collection->get($name)) {

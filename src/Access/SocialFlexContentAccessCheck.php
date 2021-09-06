@@ -83,7 +83,16 @@ class SocialFlexContentAccessCheck implements AccessInterface {
       $group_visibility_value = $group->getFieldValue('field_flexible_group_visibility', 'value');
       $is_member = $group->getMember($account) instanceof GroupMembership;
       $uid = $account->id();
-      $user = \Drupal::service('entity_type.manager')->getStorage('user')->load($uid); 
+      $user = \Drupal::service('entity_type.manager')->getStorage('user')->load($uid);
+      
+      // If we have social_community_role enabled
+      if (\Drupal::moduleHandler()->moduleExists('social_community_role')) {
+        $social_community_role_config = \Drupal::config('social_community_role.settings');
+        $enabled_role = 'authenticated_user';
+        if (isset($social_community_role_config)) {
+          $enabled_role = $social_community_role_config->get('role');
+        }
+      } 
       
       switch ($group_visibility_value) {
         case 'members':
@@ -100,7 +109,7 @@ class SocialFlexContentAccessCheck implements AccessInterface {
 
         case 'community_role':
 
-          if (!$user->hasRole('internal')) {
+          if (!$user->hasRole($enabled_role)) {
             return AccessResult::forbidden();
           }
           break;  
@@ -123,15 +132,29 @@ class SocialFlexContentAccessCheck implements AccessInterface {
       return AccessResult::allowed()->addCacheableDependency($group);
     }
 
-    // It's a non member but Community isn't enabled.
-    // No access for you only for the about page.
-    if ($account->isAuthenticated() && !social_group_flexible_group_community_enabled($group)
-      && !social_group_flexible_group_public_enabled($group) 
-      && !social_community_role_community_role_enabled($group)
-      && $route_match->getRouteName() !== 'view.group_information.page_group_about'
-      && $route_match->getRouteName() !== 'entity.group.canonical'
-      && $route_match->getRouteName() !== 'view.group_members.page_group_members') {
-      return AccessResult::forbidden()->addCacheableDependency($group);
+    // If we have social_community_role enabled
+    if (\Drupal::moduleHandler()->moduleExists('social_community_role')) {
+      // It's a non member but Community isn't enabled.
+      // No access for you only for the about page.
+      if ($account->isAuthenticated() && !social_group_flexible_group_community_enabled($group)
+        && !social_group_flexible_group_public_enabled($group) 
+        && !social_community_role_community_role_enabled($group)
+        && $route_match->getRouteName() !== 'view.group_information.page_group_about'
+        && $route_match->getRouteName() !== 'entity.group.canonical'
+        && $route_match->getRouteName() !== 'view.group_members.page_group_members') {
+        return AccessResult::forbidden()->addCacheableDependency($group);
+      }
+    }
+    else {
+      // It's a non member but Community isn't enabled.
+      // No access for you only for the about page.
+      if ($account->isAuthenticated() && !social_group_flexible_group_community_enabled($group)
+        && !social_group_flexible_group_public_enabled($group) 
+        && $route_match->getRouteName() !== 'view.group_information.page_group_about'
+        && $route_match->getRouteName() !== 'entity.group.canonical'
+        && $route_match->getRouteName() !== 'view.group_members.page_group_members') {
+        return AccessResult::forbidden()->addCacheableDependency($group);
+      }
     }
 
     // We allow it but lets add the group as dependency to the cache
