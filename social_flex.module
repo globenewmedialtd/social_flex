@@ -101,18 +101,19 @@ function social_flex_group_access(EntityInterface $entity, $operation, AccountIn
 
   // If we have social_community_role enabled
   if (\Drupal::moduleHandler()->moduleExists('social_community_role')) {
+    $social_community_role_config = \Drupal::config('social_community_role.settings');
     $enabled_role = 'authenticated_user';
-    if (isset($social_community_role_config)) {
+    if (isset($social_community_role_config)) {      
       $enabled_role = $social_community_role_config->get('role');
-      //kint($enabled_role);
-      \Drupal::logger('social_flex')->warning('<pre><code>' . print_r($enabled_role, TRUE) . '</code></pre>');
-
-
+      \Drupal::logger('social_flex')->notice('<pre><code>' . print_r($enabled_role, TRUE) . '</code></pre>');
     }
     if ($group_visibility === 'community_role') {
       $uid = $account->id();
       $user = \Drupal::service('entity_type.manager')->getStorage('user')->load($uid); 
-      return AccessResult::forbiddenIf(!$user->hasRole($enabled_role));
+      return AccessResult::forbiddenIf(!$user->hasRole($enabled_role))
+        ->cachePerUser()
+        ->addCacheableDependency($entity)
+        ->addCacheableDependency($account);
     }
   }
 

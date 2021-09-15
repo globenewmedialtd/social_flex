@@ -19,13 +19,13 @@ Please tick them to activate the flexible group logic.
 At the moment due to segmentation fault you need still a module for any custom flexible group type you create.
 But the module just need a .info and .module file. The module file has to include the following hook:
 
-```
+``
 function YOURMODULE_social_group_types_alter(array &$social_group_types) {
 
   $social_group_types[] = 'GROUP_TYPE'
 
 }
 
-```
+``
 
 
