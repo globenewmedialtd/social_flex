@@ -109,6 +109,7 @@ function social_flex_group_access(EntityInterface $entity, $operation, AccountIn
     }
     if ($group_visibility === 'community_role') {
       $uid = $account->id();
+      \Drupal::logger('social_flex')->notice('User ID: <pre><code>' . print_r($uid, TRUE) . '</code></pre>');
       $user = \Drupal::service('entity_type.manager')->getStorage('user')->load($uid); 
       return AccessResult::forbiddenIf(!$user->hasRole($enabled_role))
         ->cachePerUser()
