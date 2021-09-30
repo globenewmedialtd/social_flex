@@ -50,10 +50,10 @@ class SocialFlexServiceProvider extends ServiceProviderBase {
     }
 
     // ConfigOverride    
-    if ($container->hasDefinition('social_group_flexible_group.config_override')) {
-      $definition = $container->getDefinition('social_group_flexible_group.config_override');
-      $definition->setClass('Drupal\social_flex\SocialFlexConfigOverride');
-    } 
+    //if ($container->hasDefinition('social_group_flexible_group.config_override')) {
+      //$definition = $container->getDefinition('social_group_flexible_group.config_override');
+      //$definition->setClass('Drupal\social_flex\SocialFlexConfigOverride');
+    //} 
        
 
   }
