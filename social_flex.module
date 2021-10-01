@@ -649,6 +649,8 @@ function social_flex_views_query_alter(ViewExecutable $view, QueryPluginBase $qu
     return;
   }
 
+  kint($view->id());
+
   $account = \Drupal::currentUser();
 
   if (!$account->isAnonymous()) {
@@ -766,6 +768,15 @@ function _social_flex_get_visibility_options() {
  */
 function social_flex_node_access(NodeInterface $node, $op, AccountInterface $account) {
   return EntityAccessHelper::getEntityAccessResult($node, $op, $account);
+}
+
+/**
+ * Implements hook_views_plugins_filter_alter().
+ */
+function social_flex_views_plugins_filter_alter(array &$plugins) {
+
+  // Change the 'title' handler class.
+  $plugins['flexible_group_node_access']['class'] = 'Drupal\social_flex\Plugin\views\filter\SocialFlexGroupNodeAccess';
 }
 
 

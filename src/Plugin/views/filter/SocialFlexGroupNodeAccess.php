@@ -71,7 +71,12 @@ class SocialFlexGroupNodeAccess extends FilterPluginBase {
       $group_visible = new Condition('OR');
       $group_visible->condition('field_content_visibility_value', 'public');
       if (!$account->isAnonymous()) {
-        $group_visible->condition('field_content_visibility_value', 'community');
+        if(in_array('internal', $account->getRoles())) {
+          $group_visible->condition('field_content_visibility_value', 'community_role');
+        }
+        else {
+          $group_visible->condition('field_content_visibility_value', 'community');
+        }
       }
       if ($group_access !== NULL) {
         $group_visible->condition($group_access);
