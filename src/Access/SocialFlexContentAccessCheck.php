@@ -108,8 +108,9 @@ class SocialFlexContentAccessCheck implements AccessInterface {
           break;
 
         case 'community_role':
-
-          if (!$user->hasRole($enabled_role)) {
+          // We want members and users with enabled
+          // role grant access. 
+          if($is_member === FALSE && $user->hasRole($enabled_role) === FALSE) {
             return AccessResult::forbidden();
           }
           break;  

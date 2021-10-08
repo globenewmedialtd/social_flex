@@ -112,10 +112,21 @@ function social_flex_group_access(EntityInterface $entity, $operation, AccountIn
       $uid = $account->id();
       \Drupal::logger('social_flex')->notice('User ID: <pre><code>' . print_r($uid, TRUE) . '</code></pre>');
       \Drupal::logger('social_flex')->notice('Account Roles: <pre><code>' . print_r($account->getRoles(), TRUE) . '</code></pre>');
-      $user = User::load($uid); 
-      return AccessResult::forbiddenIf(!$user->hasRole($enabled_role))
-        ->cachePerUser()
-        ->addCacheableDependency($entity);
+      $user = User::load($uid);
+      $userHasRole = $user->hasRole($enabled_role);
+      $is_member = $entity->getMember($account);
+
+      // Here we want to denie access only when
+      // it's no member and the user has not the
+      // enabled role.
+      if(!$is_member) {   
+
+    	  return AccessResult::forbiddenIf(!$userHasRole)
+          ->cachePerPermissions()
+          ->cachePerUser()
+          ->addCacheableDependency($entity)
+          ->addCacheableDependency($account);
+      }
     }
   }
 
