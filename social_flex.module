@@ -812,6 +812,8 @@ function social_flex_social_group_allowed_visibilities_alter(array &$visibilitie
   $socialFlexCommon = \Drupal::service('social_flex.common');
   $flexible_group_types = $socialFlexCommon->getFlexibleGroups();
   $group = _social_group_get_current_group();
+
+ 
   
   if (in_array($group_type_id, $flexible_group_types)) {
 
@@ -825,15 +827,45 @@ function social_flex_social_group_allowed_visibilities_alter(array &$visibilitie
       }      
       // Try to retrieve allowed options from Group directly.
       $allowed_options = $group->get('field_group_allowed_visibility')->getValue();
+
       foreach ($allowed_options as $option) {
         $value = $option['value'];
         $visibilities[$value] = TRUE;
       }
     }
   }
+
+ 
+
 }
 
+/**
+ * Provide a method to alter the default content visibility for a group type.
+ *
+ * @param string $visibility
+ *   The visibility option that is default.
+ * @param string $group_type_id
+ *   The group type we alter the visibility setting for.
+ *
+ * @ingroup social_group_api
+ */
+function social_flex_social_group_default_visibility_alter(&$visibility, $group_type_id) {
 
+  $socialFlexCommon = \Drupal::service('social_flex.common');
+  $flexible_group_types = $socialFlexCommon->getFlexibleGroups();
+  $group = _social_group_get_current_group();
+
+  if (in_array($group_type_id, $flexible_group_types)) {
+    $allowed_options = $group->get('field_flexible_group_visibility')->getValue();
+    foreach ($allowed_options as $option) {
+      $value = $option['value'];
+      if ($value === 'community_role') {
+        $visibility = $value;
+      }
+    }
+  }
+
+}
 
 
 
