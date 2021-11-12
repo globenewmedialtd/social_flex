@@ -851,20 +851,23 @@ function social_flex_social_group_allowed_visibilities_alter(array &$visibilitie
  */
 function social_flex_social_group_default_visibility_alter(&$visibility, $group_type_id) {
 
-  $socialFlexCommon = \Drupal::service('social_flex.common');
-  $flexible_group_types = $socialFlexCommon->getFlexibleGroups();
-  $group = _social_group_get_current_group();
+  // If we have social_community_role enabled
+  // we need the default visibility
+  if (\Drupal::moduleHandler()->moduleExists('social_community_role')) {
+    $socialFlexCommon = \Drupal::service('social_flex.common');
+    $flexible_group_types = $socialFlexCommon->getFlexibleGroups();
+    $group = _social_group_get_current_group();
 
-  if (in_array($group_type_id, $flexible_group_types)) {
-    $allowed_options = $group->get('field_flexible_group_visibility')->getValue();
-    foreach ($allowed_options as $option) {
-      $value = $option['value'];
-      if ($value === 'community_role') {
-        $visibility = $value;
+    if (in_array($group_type_id, $flexible_group_types)) {
+      $allowed_options = $group->get('field_flexible_group_visibility')->getValue();
+      foreach ($allowed_options as $option) {
+        $value = $option['value'];
+        if ($value === 'community_role') {
+          $visibility = $value;
+        }
       }
     }
   }
-
 }
 
 
