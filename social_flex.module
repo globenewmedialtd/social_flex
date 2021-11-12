@@ -819,6 +819,10 @@ function social_flex_social_group_allowed_visibilities_alter(array &$visibilitie
       $visibilities['public'] = FALSE;
       $visibilities['community'] = FALSE;
       $visibilities['group'] = FALSE;
+      // If we have social_community_role enabled
+      if (\Drupal::moduleHandler()->moduleExists('social_community_role')) {
+        $visibilities['community_role'] = FALSE;
+      }      
       // Try to retrieve allowed options from Group directly.
       $allowed_options = $group->get('field_group_allowed_visibility')->getValue();
       foreach ($allowed_options as $option) {
