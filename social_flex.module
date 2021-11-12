@@ -795,6 +795,40 @@ function social_flex_views_plugins_filter_alter(array &$plugins) {
   $plugins['flexible_group_node_access']['class'] = 'Drupal\social_flex\Plugin\views\filter\SocialFlexGroupNodeAccess';
 }
 
+/**
+ * Provide a method to alter the allowed content visibility for a group type.
+ *
+ * @param array $visibilities
+ *   The visibilities list.
+ * @param string $group_type_id
+ *   The group type we alter the visibility setting for.
+ *
+ * @see social_group_get_allowed_visibility_options_per_group_type()
+ *
+ * @ingroup social_group_api
+ */
+function social_flex_social_group_allowed_visibilities_alter(array &$visibilities, $group_type_id) {
+
+  $socialFlexCommon = \Drupal::service('social_flex.common');
+  $flexible_group_types = $socialFlexCommon->getFlexibleGroups();
+  $group = _social_group_get_current_group();
+  
+  if (in_array($group_type_id, $flexible_group_types)) {
+
+    if ($group !== NULL) {
+      $visibilities['public'] = FALSE;
+      $visibilities['community'] = FALSE;
+      $visibilities['group'] = FALSE;
+      // Try to retrieve allowed options from Group directly.
+      $allowed_options = $group->get('field_group_allowed_visibility')->getValue();
+      foreach ($allowed_options as $option) {
+        $value = $option['value'];
+        $visibilities[$value] = TRUE;
+      }
+    }
+  }
+}
+
 
 
 
